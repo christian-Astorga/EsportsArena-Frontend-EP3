@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import FormularioTorneo from '../components/FormularioTorneo.jsx';
 import { useRol } from '../context/RolContext.jsx';
 import { ESTADOS_TORNEO } from '../data/datos.js';
@@ -10,123 +10,123 @@ import {
   listarInscripciones,
   listarJuegos,
   listarTorneos,
-} from '../services/db.js';
+} from '../services/api.js';
 
-// Vista de administración: demuestra el CRUD completo de torneos sobre la BD simulada.
+// Vista de administración: CRUD completo de torneos conectado a la API REST en Spring Boot.
 export default function AdminTorneos() {
   const { rol } = useRol();
-  const [juegos] = useState(() => listarJuegos());
-  const [torneos, setTorneos] = useState(() => listarTorneos());
+  const [juegos, setJuegos] = useState([]);
+  const [torneos, setTorneos] = useState([]);
+  const [totalInscripciones, setTotalInscripciones] = useState(0);
+  const [totalEquipos, setTotalEquipos] = useState(0);
   const [editando, setEditando] = useState(null);
   const [mensaje, setMensaje] = useState('');
+  const [error, setError] = useState('');
+  const [cargando, setCargando] = useState(true);
+
+  const cargarDatos = async () => {
+    try {
+      setError('');
+      const [listaJuegos, listaTorneos, listaInscripciones, listaEquipos] = await Promise.all([
+        listarJuegos(),
+        listarTorneos(),
+        listarInscripciones().catch(() => []),
+        listarEquipos().catch(() => []),
+      ]);
+      setJuegos(listaJuegos);
+      setTorneos(listaTorneos);
+      setTotalInscripciones(listaInscripciones.length);
+      setTotalEquipos(listaEquipos.length);
+    } catch (err) {
+      setError('No se pudieron cargar los datos desde el servidor.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    if (rol === 'Administrador') {
+      cargarDatos();
+    }
+  }, [rol]);
 
   if (rol !== 'Administrador') {
     return (
-      <div className="alert alert-warning" role="alert">
-        Acceso restringido. Selecciona el rol 'Administrador' en el selector superior para ver este panel.
-      </div>
+        <div className="alert alert-warning" role="alert">
+          Acceso restringido. Inicia sesión como 'Administrador' para ver este panel.
+        </div>
     );
   }
 
-  const refrescar = () => setTorneos(listarTorneos());
-
-  const guardar = (datos) => {
-    if (editando) {
-      actualizarTorneo(editando.id, datos);
-      setMensaje('Torneo actualizado correctamente.');
-      setEditando(null);
-    } else {
-      crearTorneo(datos);
-      setMensaje('Torneo creado correctamente.');
+  const guardar = async (datos) => {
+    try {
+      setError('');
+      if (editando) {
+        await actualizarTorneo(editando.id, datos);
+        setMensaje('Torneo actualizado correctamente en la base de datos.');
+        setEditando(null);
+      } else {
+        await crearTorneo(datos);
+        setMensaje('Torneo creado correctamente en la base de datos.');
+      }
+      await cargarDatos();
+    } catch (err) {
+      setError(err.message || 'Error al guardar el torneo.');
     }
-    refrescar();
   };
 
-  const eliminar = (torneo) => {
+  const eliminar = async (torneo) => {
     if (!window.confirm(`¿Eliminar el torneo "${torneo.nombre}"?`)) return;
-    eliminarTorneo(torneo.id);
-    if (editando?.id === torneo.id) setEditando(null);
-    setMensaje('Torneo eliminado.');
-    refrescar();
+    try {
+      setError('');
+      await eliminarTorneo(torneo.id);
+      if (editando?.id === torneo.id) setEditando(null);
+      setMensaje('Torneo eliminado correctamente.');
+      await cargarDatos();
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar el torneo (puede tener inscripciones asociadas).');
+    }
   };
 
   return (
-    <>
-      <h2 className="mb-3">Panel de Administración</h2>
+      <>
+        <h2 className="mb-3">Panel de Administración</h2>
 
-      <div className="row g-3 mb-4">
-        <div className="col-12 col-md-4">
-          <div className="card card-esports text-center p-3">
-            <div className="display-6">{torneos.length}</div>
-            <div>Torneos</div>
+        <div className="row g-3 mb-4">
+          <div className="col-12 col-md-4">
+            <div className="card card-esports text-center p-3">
+              <div className="display-6">{torneos.length}</div>
+              <div>Torneos</div>
+            </div>
+          </div>
+          <div className="col-12 col-md-4">
+            <div className="card card-esports text-center p-3">
+              <div className="display-6">{totalInscripciones}</div>
+              <div>Inscripciones</div>
+            </div>
+          </div>
+          <div className="col-12 col-md-4">
+            <div className="card card-esports text-center p-3">
+              <div className="display-6">{totalEquipos}</div>
+              <div>Equipos</div>
+            </div>
           </div>
         </div>
-        <div className="col-12 col-md-4">
-          <div className="card card-esports text-center p-3">
-            <div className="display-6">{listarInscripciones().length}</div>
-            <div>Inscripciones</div>
-          </div>
-        </div>
-        <div className="col-12 col-md-4">
-          <div className="card card-esports text-center p-3">
-            <div className="display-6">{listarEquipos().length}</div>
-            <div>Equipos</div>
-          </div>
-        </div>
-      </div>
 
-      {mensaje && (
-        <div className="alert alert-success" role="status">
-          {mensaje}
-        </div>
-      )}
+        {mensaje && (
+            <div className="alert alert-success" role="status">
+              {mensaje}
+            </div>
+        )}
 
-      <FormularioTorneo
-        key={editando ? editando.id : 'nuevo'}
-        juegos={juegos}
-        estados={ESTADOS_TORNEO}
-        torneoEditando={editando}
-        onGuardar={guardar}
-        onCancelar={() => setEditando(null)}
-      />
+        {error && (
+            <div className="alert alert-danger" role="alert">
+              {error}
+            </div>
+        )}
 
-      <div className="table-responsive">
-        <table className="table table-striped align-middle">
-          <thead>
-            <tr>
-              <th scope="col">ID</th>
-              <th scope="col">Nombre</th>
-              <th scope="col">Juego</th>
-              <th scope="col">Estado</th>
-              <th scope="col">Cupos</th>
-              <th scope="col">Cierre</th>
-              <th scope="col">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {torneos.map((t) => (
-              <tr key={t.id}>
-                <td>{t.id}</td>
-                <td>{t.nombre}</td>
-                <td>{t.juegoNombre}</td>
-                <td>{t.estado}</td>
-                <td>
-                  {t.cuposOcupados}/{t.cuposMaximos}
-                </td>
-                <td>{t.fechaCierre}</td>
-                <td className="text-nowrap">
-                  <button type="button" className="btn btn-sm btn-outline-info me-2" onClick={() => setEditando(t)}>
-                    Editar
-                  </button>
-                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => eliminar(t)}>
-                    Eliminar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
+        <FormularioTorneo
+            key={editando ? editando.id : 'nuevo'}
+            juegos={juegos}
+            estados={ESTADOS_TORNEO}
+            tor
