@@ -1,34 +1,88 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { ROLES } from '../data/datos.js';
+// src/context/RolContext.jsx
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  limpiarTokens,
+  loginApi,
+  obtenerPerfilActual,
+  obtenerToken,
+  registrarApi,
+} from '../services/api.js';
 
-const CLAVE_ROL = 'esports-arena-rol';
+export const RolContext = createContext({
+  usuario: null,
+  rol: 'Visitante',
+  cargandoSesion: true,
+  puedeActuar: false,
+  esAdmin: false,
+  iniciarSesion: async () => {},
+  registrarse: async () => {},
+  cerrarSesion: () => {},
+});
 
-// Valor por defecto: permite renderizar componentes sin proveedor (útil en pruebas).
-export const RolContext = createContext({ rol: 'Visitante', setRol: () => {}, puedeActuar: false });
-
-function leerRolGuardado() {
-  try {
-    const guardado = localStorage.getItem(CLAVE_ROL);
-    return ROLES.includes(guardado) ? guardado : 'Visitante';
-  } catch {
-    return 'Visitante';
-  }
+// Mapea el rol del backend ('ADMINISTRADOR', 'VENDEDOR', 'CLIENTE') al formato de la interfaz
+function formatearRol(rolBackend) {
+  if (!rolBackend) return 'Visitante';
+  const mapa = {
+    ADMINISTRADOR: 'Administrador',
+    VENDEDOR: 'Vendedor',
+    CLIENTE: 'Cliente',
+  };
+  return mapa[rolBackend.toUpperCase()] || rolBackend;
 }
 
-export function RolProvider({ children, rolInicial }) {
-  const [rol, setRolEstado] = useState(() => rolInicial ?? leerRolGuardado());
+export function RolProvider({ children }) {
+  const [usuario, setUsuario] = useState(null);
+  const [cargandoSesion, setCargandoSesion] = useState(true);
 
-  const setRol = useCallback((nuevoRol) => {
-    if (!ROLES.includes(nuevoRol)) return;
-    setRolEstado(nuevoRol);
-    try {
-      localStorage.setItem(CLAVE_ROL, nuevoRol);
-    } catch {
-      // sin persistencia
+  // Al cargar o recargar la página (F5), restaura la sesión con el token guardado
+  useEffect(() => {
+    const token = obtenerToken();
+    if (!token) {
+      setCargandoSesion(false);
+      return;
     }
+
+    obtenerPerfilActual()
+        .then((user) => setUsuario(user))
+        .catch(() => {
+          limpiarTokens();
+          setUsuario(null);
+        })
+        .finally(() => setCargandoSesion(false));
   }, []);
 
-  const valor = useMemo(() => ({ rol, setRol, puedeActuar: rol !== 'Visitante' }), [rol, setRol]);
+  const iniciarSesion = useCallback(async (correo, password) => {
+    const respuesta = await loginApi(correo, password);
+    setUsuario(respuesta.usuario);
+    return respuesta.usuario;
+  }, []);
+
+  const registrarse = useCallback(async (nombre, correo, password) => {
+    const respuesta = await registrarApi(nombre, correo, password);
+    setUsuario(respuesta.usuario);
+    return respuesta.usuario;
+  }, []);
+
+  const cerrarSesion = useCallback(() => {
+    limpiarTokens();
+    setUsuario(null);
+  }, []);
+
+  const rol = usuario ? formatearRol(usuario.rol) : 'Visitante';
+
+  const valor = useMemo(
+      () => ({
+        usuario,
+        rol,
+        cargandoSesion,
+        puedeActuar: Boolean(usuario),
+        esAdmin: rol === 'Administrador',
+        iniciarSesion,
+        registrarse,
+        cerrarSesion,
+      }),
+      [usuario, rol, cargandoSesion, iniciarSesion, registrarse, cerrarSesion]
+  );
 
   return <RolContext.Provider value={valor}>{children}</RolContext.Provider>;
 }

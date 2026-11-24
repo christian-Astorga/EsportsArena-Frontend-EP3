@@ -1,14 +1,19 @@
+// src/components/AvisoRol.jsx
+import { Link } from 'react-router-dom';
 import { useRol } from '../context/RolContext.jsx';
 
-// Renderizado condicional: solo se muestra si el rol es Visitante.
 export default function AvisoRol() {
-  const { rol } = useRol();
-  if (rol !== 'Visitante') return null;
+    const { rol, cargandoSesion } = useRol();
+    if (cargandoSesion || rol !== 'Visitante') return null;
 
-  return (
-    <div className="alert alert-danger" role="alert">
-      Estás navegando como Visitante. Selecciona el rol 'Jugador' en el selector superior para habilitar las
-      inscripciones.
-    </div>
-  );
+    return (
+        <div className="alert alert-warning d-flex justify-content-between align-items-center" role="alert">
+      <span>
+        Estás navegando como <strong>Visitante</strong>. Inicia sesión para inscribirte en torneos o crear un equipo.
+      </span>
+            <Link to="/login" className="btn btn-sm btn-dark">
+                Iniciar sesión
+            </Link>
+        </div>
+    );
 }
