@@ -129,4 +129,52 @@ export default function AdminTorneos() {
             key={editando ? editando.id : 'nuevo'}
             juegos={juegos}
             estados={ESTADOS_TORNEO}
-            tor
+            torneoEditando={editando}
+            onGuardar={guardar}
+            onCancelar={() => setEditando(null)}
+        />
+
+        {cargando ? (
+            <p className="text-muted">Cargando torneos desde el servidor...</p>
+        ) : (
+            <div className="table-responsive">
+              <table className="table table-striped align-middle">
+                <thead>
+                <tr>
+                  <th scope="col">ID</th>
+                  <th scope="col">Nombre</th>
+                  <th scope="col">Juego</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Cupos</th>
+                  <th scope="col">Cierre</th>
+                  <th scope="col">Acciones</th>
+                </tr>
+                </thead>
+                <tbody>
+                {torneos.map((t) => (
+                    <tr key={t.id}>
+                      <td>{t.id}</td>
+                      <td>{t.nombre}</td>
+                      <td>{t.juegoNombre}</td>
+                      <td>{t.estado}</td>
+                      <td>
+                        {t.cuposOcupados}/{t.cuposMaximos}
+                      </td>
+                      <td>{t.fechaCierre}</td>
+                      <td className="text-nowrap">
+                        <button type="button" className="btn btn-sm btn-outline-info me-2" onClick={() => setEditando(t)}>
+                          Editar
+                        </button>
+                        <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => eliminar(t)}>
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                ))}
+                </tbody>
+              </table>
+            </div>
+        )}
+      </>
+  );
+}
